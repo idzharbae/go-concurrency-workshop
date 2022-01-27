@@ -1,0 +1,73 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"runtime"
+	"time"
+
+	"github.com/idzharbae/go-concurrency-workshop/workshop-problem-1/src"
+)
+
+func main() {
+	now := time.Now()
+
+	var pokemonList []src.PokemonResult
+
+	limit := 10
+	offset := 0
+
+	// Get all pokemons
+	for {
+		pokemonListResponse, err := src.ListPokemon(limit, offset)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pokemonList = append(pokemonList, pokemonListResponse.Results...)
+		log.Printf("Fetched %d pokemons out of %d\n", len(pokemonList), pokemonListResponse.Count)
+
+		offset += 10
+		if offset > pokemonListResponse.Count {
+			break
+		}
+	}
+
+	// Get each pokemon details
+	for _, pokemonFromList := range pokemonList {
+		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+
+		err = SavePokemonDummy(pokemonDetail)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	log.Printf("Fetched %d pokemons in %v!\n", len(pokemonList), time.Since(now))
+	PrintMemUsage()
+}
+
+func SavePokemonDummy(pokemon src.PokemonDetails) error {
+	// TODO: Save pokemon to DB
+
+	return nil
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
