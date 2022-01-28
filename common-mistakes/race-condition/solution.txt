@@ -1,0 +1,2 @@
+- Spawn single thread for write
+- Resource locking
