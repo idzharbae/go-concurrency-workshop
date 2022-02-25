@@ -16,48 +16,42 @@ func main() {
 
 	now := time.Now()
 
-	var pokemonList []src.PokemonResult
+	pokemonListCh := make(chan src.PokemonResult)
 
 	limit := 10
 	offset := 0
+	count := 0
 
-	// Get all pokemons
-	for {
-		pokemonListResponse, err := src.ListPokemon(limit, offset)
-		if err != nil {
-			log.Fatal(err)
+	go func() {
+		defer close(pokemonListCh)
+
+		// Get all pokemons
+		for {
+			pokemonListResponse := getPokemonList(debugFlag, limit, offset)
+
+			count += len(pokemonListResponse.Results)
+
+			if *debugFlag {
+				log.Printf("Fetched %d pokemons out of %d\n", count, pokemonListResponse.Count)
+			}
+
+			for _, pokemonListResult := range pokemonListResponse.Results {
+				pokemonListCh <- pokemonListResult
+			}
+
+			offset += 10
+			if offset > pokemonListResponse.Count {
+				break
+			}
 		}
-
-		pokemonList = append(pokemonList, pokemonListResponse.Results...)
-
-		if *debugFlag {
-			log.Printf("Fetched %d pokemons out of %d\n", len(pokemonList), pokemonListResponse.Count)
-		}
-
-		offset += 10
-		if offset > pokemonListResponse.Count {
-			break
-		}
-	}
+	}()
 
 	// Get each pokemon details
-	for _, pokemonFromList := range pokemonList {
-		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if *debugFlag {
-			log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
-		}
-
-		err = SavePokemonDummy(pokemonDetail)
-		if err != nil {
-			log.Fatal(err)
-		}
+	for pokemonFromList := range pokemonListCh {
+		go getPokemonDetail(debugFlag, pokemonFromList)
 	}
 
-	log.Printf("Fetched %d pokemons in %v!\n", len(pokemonList), time.Since(now))
+	log.Printf("Fetched %d pokemons in %v!\n", count, time.Since(now))
 	PrintMemUsage()
 }
 
@@ -80,4 +74,33 @@ func PrintMemUsage() {
 
 func bToMb(b uint64) uint64 {
 	return b / 1024 / 1024
+}
+
+func getPokemonList(debugFlag *bool, limit, offset int) (pokemonList src.ListPokemonResponse) {
+	pokemonListResponse, err := src.ListPokemon(limit, offset)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return pokemonListResponse
+}
+
+func getPokemonDetail(debugFlag *bool, pokemonFromList src.PokemonResult) {
+	if *debugFlag {
+		log.Printf("Get detail pokemon %s\n", pokemonFromList.Name)
+	}
+
+	pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go setPokemonDetail(pokemonDetail)
+}
+
+func setPokemonDetail(pokemonDetail src.PokemonDetails) {
+	err := SavePokemonDummy(pokemonDetail)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
