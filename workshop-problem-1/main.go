@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/idzharbae/go-concurrency-workshop/workshop-problem-1/src"
 )
 
+var debugFlag *bool
+
 func main() {
-	debugFlag := flag.Bool("debug", false, "toggle debug log")
+	debugFlag = flag.Bool("debug", false, "toggle debug log")
 	flag.Parse()
 
 	now := time.Now()
@@ -40,25 +43,39 @@ func main() {
 		}
 	}
 
+	workersCount := len(pokemonList)
+
+	var wg sync.WaitGroup
+	wg.Add(workersCount)
+
 	// Get each pokemon details
 	for _, pokemonFromList := range pokemonList {
-		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if *debugFlag {
-			log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
-		}
-
-		err = SavePokemonDummy(pokemonDetail)
-		if err != nil {
-			log.Fatal(err)
-		}
+		go func(name string) {
+			defer wg.Done()
+			CatchPokeDex(name)
+		}(pokemonFromList.Name)
 	}
+
+	wg.Wait()
 
 	log.Printf("Fetched %d pokemons in %v!\n", len(pokemonList), time.Since(now))
 	PrintMemUsage()
+}
+
+func CatchPokeDex(name string) {
+	pokemonDetail, err := src.GetPokemonDetailsByName(name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *debugFlag {
+		log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+	}
+
+	err = SavePokemonDummy(pokemonDetail)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func SavePokemonDummy(pokemon src.PokemonDetails) error {
