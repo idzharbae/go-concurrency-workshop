@@ -25,7 +25,6 @@ func main() {
 
 	pokemonNameChan := make(chan string)
 	pokemonDetailChan := make(chan src.PokemonDetails)
-	generatorLimiter := make(chan bool, maxWorkers)
 
 	// Get all pokemons
 	limit := 10
@@ -38,6 +37,13 @@ func main() {
 	}
 
 	maxPokemon := pokemonListResponse.Count
+
+	maxPokemonNameGenerators := maxWorkers / 10 // Similar runtime with maxGenerators = maxWorkers
+	if maxPokemonNameGenerators == 0 {
+		maxPokemonNameGenerators = 1
+	}
+
+	generatorLimiter := make(chan bool, maxPokemonNameGenerators)
 
 	// Spawn pokemon name generators
 	go func() {
@@ -56,7 +62,7 @@ func main() {
 		}
 
 		// Wait until all go routines are done
-		for i := 0; i < maxWorkers; i++ {
+		for i := 0; i < maxPokemonNameGenerators; i++ {
 			generatorLimiter <- true
 		}
 	}()
@@ -92,16 +98,17 @@ func main() {
 				}
 
 				numberOfPokemons.Add(1)
-				// log.Printf("Saved %d out of %d pokemons.", numberOfPokemons, 898)
+				if *debugFlag {
+					log.Printf("Saved %d out of %d pokemons.", numberOfPokemons, 898)
+				}
 			}
 		}()
 	}
 
 	wgSave.Wait()
 
-	log.Printf("Fetched %d pokemons in %v!\n", numberOfPokemons, time.Since(now))
+	log.Printf("Fetched %d pokemons in %v!\n", numberOfPokemons.Load(), time.Since(now))
 
-	runtime.GC()
 	PrintMemUsage()
 }
 
