@@ -2,7 +2,7 @@ package src
 
 import (
 	"encoding/json"
-	"os"
+	"io/ioutil"
 	"time"
 )
 
@@ -21,7 +21,7 @@ func ListPokemon(limit, offset int) (ListPokemonResponse, error) {
 	// }
 
 	time.Sleep(time.Second / 10) // Simulate latency
-	responseBody, err := os.ReadFile("./dummy_pokemon_list.json")
+	responseBody, err := ioutil.ReadFile("./dummy_pokemon_list.json")
 	if err != nil {
 		return ListPokemonResponse{}, err
 	}
@@ -32,7 +32,12 @@ func ListPokemon(limit, offset int) (ListPokemonResponse, error) {
 	}
 
 	if len(pokemonResponse.Results) > pokemonResponse.Count-offset {
-		pokemonResponse.Results = pokemonResponse.Results[:(pokemonResponse.Count - offset)]
+		//can get index out of bound [0:-2]
+		count := (pokemonResponse.Count - offset)
+		if count < 0 {
+			count = 0
+		}
+		pokemonResponse.Results = pokemonResponse.Results[:count]
 	}
 
 	return pokemonResponse, nil

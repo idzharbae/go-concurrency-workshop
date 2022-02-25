@@ -2,7 +2,7 @@ package src
 
 import (
 	"encoding/json"
-	"os"
+	"io/ioutil"
 	"time"
 )
 
@@ -18,7 +18,7 @@ func GetPokemonDetailsByName(name string) (PokemonDetails, error) {
 	// }
 
 	time.Sleep(time.Second / 10) // Simulate latency
-	responseBody, err := os.ReadFile("./dummy_pokemon.json")
+	responseBody, err := ioutil.ReadFile("./dummy_pokemon.json")
 	if err != nil {
 		return PokemonDetails{}, err
 	}
