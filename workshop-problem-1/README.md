@@ -4,7 +4,7 @@ Constraints:
 - Don't modify any file other than main.go, adding new file is allowed
 
 Optional Constraint: 
-- Max 20 go routines
+- Limit number of go routines (the limit is up to you)
 
 Run the program:
 ```
