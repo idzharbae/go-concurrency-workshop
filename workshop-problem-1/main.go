@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/idzharbae/go-concurrency-workshop/workshop-problem-1/src"
@@ -15,8 +16,13 @@ func main() {
 	flag.Parse()
 
 	now := time.Now()
-
+	MaxAsyncProcessGetAvailablePromoLogistic := 5
 	var pokemonList []src.PokemonResult
+
+	var (
+		wg        sync.WaitGroup
+		asyncChan = make(chan bool, MaxAsyncProcessGetAvailablePromoLogistic)
+	)
 
 	limit := 10
 	offset := 0
@@ -42,20 +48,42 @@ func main() {
 
 	// Get each pokemon details
 	for _, pokemonFromList := range pokemonList {
-		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
-		if err != nil {
-			log.Fatal(err)
-		}
 
-		if *debugFlag {
-			log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
-		}
+		wg.Add(1)
 
-		err = SavePokemonDummy(pokemonDetail)
-		if err != nil {
-			log.Fatal(err)
-		}
+		go func(pokemon *src.PokemonResult, wg *sync.WaitGroup) {
+			defer func() {
+				if errPanic := recover(); errPanic != nil {
+					log.Fatal(errPanic)
+				}
+				wg.Done()
+			}()
+
+			pokemonDetail, err := src.GetPokemonDetailsByName(pokemon.Name)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if *debugFlag {
+				log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+			}
+
+			err = SavePokemonDummy(pokemonDetail)
+			if err != nil {
+				log.Fatal(err)
+			}
+			asyncChan <- true
+
+			if *debugFlag {
+				log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+			}
+
+			<-asyncChan
+
+		}(&pokemonFromList, &wg)
+
 	}
+	wg.Wait()
 
 	log.Printf("Fetched %d pokemons in %v!\n", len(pokemonList), time.Since(now))
 	PrintMemUsage()
