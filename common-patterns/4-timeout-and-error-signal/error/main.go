@@ -79,35 +79,30 @@ func beliGula(ctx context.Context) error {
 }
 
 func bikinKue(ctx context.Context) error {
+	done := make(chan bool)
 	errChan := make(chan error)
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	done := make(chan bool)
+	type belanja func(ctx context.Context) error
+
+	jobs := []belanja{
+		beliTepung, beliTelor,
+	}
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(len(jobs))
 
-	// Mesen tepung
-	go func(ctx context.Context) {
-		defer wg.Done()
+	for _, job := range jobs {
+		go func(job belanja, ctx context.Context) {
+			defer wg.Done()
 
-		err := beliTepung(ctx)
-		if err != nil {
-			errChan <- err
-		}
-	}(ctx)
-
-	// Mesen telor
-	go func(ctx context.Context) {
-		defer wg.Done()
-
-		err := beliTelor(ctx)
-		if err != nil {
-			errChan <- err
-		}
-	}(ctx)
+			err := job(ctx)
+			if err != nil {
+				errChan <- err
+			}
+		}(job, ctx)
+	}
 
 	go func() {
 		defer func() {

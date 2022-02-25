@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"runtime"
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+	debugFlag := flag.Bool("debug", false, "toggle debug log")
+	flag.Parse()
+
 	now := time.Now()
 
 	var pokemonList []src.PokemonResult
@@ -25,7 +29,10 @@ func main() {
 		}
 
 		pokemonList = append(pokemonList, pokemonListResponse.Results...)
-		log.Printf("Fetched %d pokemons out of %d\n", len(pokemonList), pokemonListResponse.Count)
+
+		if *debugFlag {
+			log.Printf("Fetched %d pokemons out of %d\n", len(pokemonList), pokemonListResponse.Count)
+		}
 
 		offset += 10
 		if offset > pokemonListResponse.Count {
@@ -40,7 +47,9 @@ func main() {
 			log.Fatal(err)
 		}
 
-		log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+		if *debugFlag {
+			log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
+		}
 
 		err = SavePokemonDummy(pokemonDetail)
 		if err != nil {
@@ -53,7 +62,8 @@ func main() {
 }
 
 func SavePokemonDummy(pokemon src.PokemonDetails) error {
-	// TODO: Save pokemon to DB
+	// Saving to DB
+	time.Sleep(time.Second / 10)
 
 	return nil
 }

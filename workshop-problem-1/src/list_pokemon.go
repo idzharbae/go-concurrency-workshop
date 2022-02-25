@@ -31,5 +31,9 @@ func ListPokemon(limit, offset int) (ListPokemonResponse, error) {
 		return ListPokemonResponse{}, err
 	}
 
+	if len(pokemonResponse.Results) > pokemonResponse.Count-offset {
+		pokemonResponse.Results = pokemonResponse.Results[:(pokemonResponse.Count - offset)]
+	}
+
 	return pokemonResponse, nil
 }

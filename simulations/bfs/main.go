@@ -3,13 +3,12 @@ package main
 import (
 	"container/list"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 )
 
-var visited = new(sync.Map)
-
-func bfs(adjList map[int][]int, root int) (traversedNodes int) {
+func bfs(adjList map[int][]int, root int, visited *sync.Map) (traversedNodes int) {
 	q := list.New()
 
 	if _, ok := visited.Load(root); ok {
@@ -25,16 +24,10 @@ func bfs(adjList map[int][]int, root int) (traversedNodes int) {
 		front := e.Value.(int)
 		q.Remove(e)
 
-		// fmt.Println(root, front)
-
 		for _, child := range adjList[front] {
 			if _, ok := visited.Load(child); ok {
 				continue
 			}
-
-			// if root != 0 {
-			// 	fmt.Println("asdf")
-			// }
 
 			visited.Store(child, true)
 			q.PushBack(child)
@@ -45,21 +38,21 @@ func bfs(adjList map[int][]int, root int) (traversedNodes int) {
 	return
 }
 
-func bfsConcurrent(adjList map[int][]int, n int) {
+func bfsConcurrent(adjList map[int][]int, n int, visited *sync.Map) {
 	var wg sync.WaitGroup
 
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		traversedNodes := bfs(adjList, 0)
-		fmt.Println("Traversed nodes 1:", traversedNodes)
+		bfs(adjList, 0, visited)
+		// fmt.Println("Traversed nodes 1:", traversedNodes)
 	}()
 
 	go func() {
 		defer wg.Done()
-		traversedNodes := bfs(adjList, (n*n)-1)
-		fmt.Println("Traversed nodes 2:", traversedNodes)
+		bfs(adjList, (n*n)-1, visited)
+		// fmt.Println("Traversed nodes 2:", traversedNodes)
 	}()
 
 	wg.Wait()
@@ -68,8 +61,6 @@ func bfsConcurrent(adjList map[int][]int, n int) {
 func generateMazeAdjList(n int) map[int][]int {
 	result := make(map[int][]int)
 
-	// node number = i + n*j
-	// total nodes = n*n
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			nodeNumber := i + (n * j)
@@ -98,8 +89,21 @@ func generateMazeAdjList(n int) map[int][]int {
 func main() {
 	maze := generateMazeAdjList(800)
 
+	var wg sync.WaitGroup
+	wg.Add(12)
+
 	now := time.Now()
-	// bfs(maze, 0)
-	bfsConcurrent(maze, 800)
+
+	for i := 0; i < 12; i++ {
+		go func(maze map[int][]int) {
+			defer wg.Done()
+			bfsConcurrent(maze, 800, new(sync.Map))
+		}(maze)
+	}
+
+	wg.Wait()
+
 	fmt.Println(time.Since(now))
+
+	fmt.Println(runtime.NumCPU())
 }

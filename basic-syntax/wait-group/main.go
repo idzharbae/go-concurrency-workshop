@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -14,17 +13,9 @@ func slowIO() int {
 func main() {
 	now := time.Now()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-
 	for i := 0; i < 2; i++ {
-		go func() {
-			defer wg.Done()
-			fmt.Println(slowIO())
-		}()
+		fmt.Println(slowIO())
 	}
-
-	wg.Wait()
 
 	fmt.Println(time.Since(now))
 }
