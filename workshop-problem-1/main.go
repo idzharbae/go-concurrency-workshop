@@ -5,60 +5,133 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/idzharbae/go-concurrency-workshop/workshop-problem-1/src"
+	"go.uber.org/atomic"
 )
 
+var debugFlag *bool
+var numberOfPokemons atomic.Int32
+
 func main() {
-	debugFlag := flag.Bool("debug", false, "toggle debug log")
+	debugFlag = flag.Bool("debug", false, "toggle debug log")
 	flag.Parse()
 
 	now := time.Now()
 
-	var pokemonList []src.PokemonResult
+	maxWorkers := 80
 
+	pokemonNameChan := make(chan string)
+	pokemonDetailChan := make(chan src.PokemonDetails)
+
+	// Get all pokemons
 	limit := 10
 	offset := 0
 
-	// Get all pokemons
-	for {
-		pokemonListResponse, err := src.ListPokemon(limit, offset)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		pokemonList = append(pokemonList, pokemonListResponse.Results...)
-
-		if *debugFlag {
-			log.Printf("Fetched %d pokemons out of %d\n", len(pokemonList), pokemonListResponse.Count)
-		}
-
-		offset += 10
-		if offset > pokemonListResponse.Count {
-			break
-		}
+	// Get first page for max pokemon
+	pokemonListResponse, err := src.ListPokemon(limit, offset)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	maxPokemon := pokemonListResponse.Count
+
+	maxPokemonNameGenerators := maxWorkers / 10 // Similar runtime with maxGenerators = maxWorkers
+	if maxPokemonNameGenerators == 0 {
+		maxPokemonNameGenerators = 1
+	}
+
+	generatorLimiter := make(chan bool, maxPokemonNameGenerators)
+
+	// Spawn pokemon name generators
+	go func() {
+		defer close(pokemonNameChan)
+
+		for offset := 0; offset < maxPokemon; offset += limit {
+			// Take one limiter slot
+			generatorLimiter <- true
+			go func(limit, offset int) {
+				defer func() {
+					<-generatorLimiter
+				}()
+
+				pokemonNameGenerator(pokemonNameChan, limit, offset)
+			}(limit, offset)
+		}
+
+		// Wait until all go routines are done
+		for i := 0; i < maxPokemonNameGenerators; i++ {
+			generatorLimiter <- true
+		}
+	}()
 
 	// Get each pokemon details
-	for _, pokemonFromList := range pokemonList {
-		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonFromList.Name)
-		if err != nil {
-			log.Fatal(err)
-		}
+	var wg sync.WaitGroup
 
-		if *debugFlag {
-			log.Printf("Get detail pokemon %s\n", pokemonDetail.Name)
-		}
+	wg.Add(maxWorkers)
 
-		err = SavePokemonDummy(pokemonDetail)
-		if err != nil {
-			log.Fatal(err)
-		}
+	for i := 0; i < maxWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			pokemonDetailGenerator(pokemonNameChan, pokemonDetailChan)
+		}()
 	}
 
-	log.Printf("Fetched %d pokemons in %v!\n", len(pokemonList), time.Since(now))
+	// Close chan after all pokemons are fetched
+	go func() {
+		defer close(pokemonDetailChan)
+		wg.Wait()
+	}()
+
+	var wgSave sync.WaitGroup
+	wgSave.Add(maxWorkers)
+	for i := 0; i < maxWorkers; i++ {
+		go func() {
+			defer wgSave.Done()
+
+			for pokemonDetail := range pokemonDetailChan {
+				err := SavePokemonDummy(pokemonDetail)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				numberOfPokemons.Add(1)
+				if *debugFlag {
+					log.Printf("Saved %d out of %d pokemons.", numberOfPokemons, 898)
+				}
+			}
+		}()
+	}
+
+	wgSave.Wait()
+
+	log.Printf("Fetched %d pokemons in %v!\n", numberOfPokemons.Load(), time.Since(now))
+
 	PrintMemUsage()
+}
+
+func pokemonDetailGenerator(pokemonNameChan <-chan string, pokemonDetailChan chan<- src.PokemonDetails) {
+	for pokemonName := range pokemonNameChan {
+		pokemonDetail, err := src.GetPokemonDetailsByName(pokemonName)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pokemonDetailChan <- pokemonDetail
+	}
+}
+
+func pokemonNameGenerator(pokemonNameChan chan<- string, limit, offset int) {
+	pokemonListResponse, err := src.ListPokemon(limit, offset)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, pokemon := range pokemonListResponse.Results {
+		pokemonNameChan <- pokemon.Name
+	}
 }
 
 func SavePokemonDummy(pokemon src.PokemonDetails) error {
